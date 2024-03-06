@@ -1,0 +1,205 @@
+name: "CI"
+
+env:
+  FOUNDRY_PROFILE: "ci"
+
+on:
+  workflow_dispatch:
+  pull_request:
+  push:
+    branches:
+      - "main"
+
+jobs:
+  lint:
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v3"
+
+      - name: "Install Node.js"
+        uses: "actions/setup-node@v3"
+        with:
+          cache: "yarn"
+          node-version: "lts/*"
+
+      - name: "Install the Node.js dependencies"
+        run: "yarn install --immutable"
+
+      - name: "Lint the contracts"
+        run: "yarn lint"
+
+      - name: "Add lint summary"
+        run: |
+          echo "## Lint result" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Passed" >> $GITHUB_STEP_SUMMARY
+  build:
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v3"
+        with:
+          submodules: "recursive"
+
+      - name: "Install Foundry"
+        uses: "foundry-rs/foundry-toolchain@v1"
+
+      - name: "Install the Node.js dependencies"
+        run: "yarn install --immutable"
+
+      - name: "Build the contracts and print their size"
+        run: "forge build --sizes"
+
+      - name: "Add build summary"
+        run: |
+          echo "## Build result" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Passed" >> $GITHUB_STEP_SUMMARY
+  test:
+    needs: ["lint", "build"]
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v3"
+        with:
+          submodules: "recursive"
+
+      - name: "Install Foundry"
+        uses: "foundry-rs/foundry-toolchain@v1"
+
+      - name: "Install the Node.js dependencies"
+        run: "yarn install --immutable"
+
+      - name: "Run the tests"
+        run: "forge test"
+
+      - name: Compile contracts
+        run: |
+          forge build --build-info --force
+
+      - name: "Run Echidna"
+        uses: "crytic/echidna-action@v2"
+        with:
+          files: .
+          contract: VaultRewardEchidnaTest
+          crytic-args: --ignore-compile
+          config: echidna.yml
+
+      - name: "Metropolis Goerli deployment preview"
+        run: |
+          yarn run metro:protocol:goerli
+        continue-on-error: true
+
+      - name: "Add test summary"
+        run: |
+          echo "## Tests result" >> $GITHUB_STEP_SUMMARY
+          echo "✅ Passed" >> $GITHUB_STEP_SUMMARY
+
+  slither:
+    needs: ["lint", "build", "test"]
+    runs-on: ubuntu-latest
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v3"
+        with:
+          submodules: "recursive"
+
+      - name: "Install Foundry"
+        uses: "foundry-rs/foundry-toolchain@v1"
+
+      - name: "Install the Node.js dependencies"
+        run: "yarn install --immutable"
+
+      - name: "Install Slither"
+        run: |
+          pip3 install wheel
+          pip3 install slither-analyzer==0.9.3
+
+      - name: "Build the contracts and print their size"
+        run: "forge build"
+
+      - name: Run Slither
+        run: slither . --no-fail-pedantic > output.log
+
+      - name: "Add Slither summary"
+        run: |
+          echo "## Slither result" >> $GITHUB_STEP_SUMMARY
+          cat output.log >> $GITHUB_STEP_SUMMARY
+
+  ##Disable CERTORA CI
+  #certora-verify:
+  #  runs-on: ubuntu-latest
+  #  steps:
+  #    # check out the current version
+  #    - uses: actions/checkout@v2
+  #
+  #    # install Certora dependencies and CLI
+  #    - name: Install python
+  #      uses: actions/setup-python@v2
+  #      with:
+  #        python-version: "3.10"
+  #        # cache: 'pip'
+  #    - name: Install certora
+  #      run: pip3 install certora-cli-beta
+  #
+  #    - name: "Install Foundry"
+  #      uses: "foundry-rs/foundry-toolchain@v1"
+  #
+  #    - name: "Install the Node.js dependencies"
+  #      run: "yarn install --immutable"
+  #
+  #    # Install the appropriate version of solc
+  #    - name: Install solc
+  #      run: |
+  #        wget https://github.com/ethereum/solidity/releases/download/v0.8.18/solc-static-linux
+  #        sudo mv solc-static-linux /usr/local/bin/solc8.18
+  #        chmod +x /usr/local/bin/solc8.18
+  #
+  #    - name: Verify rule ${{ matrix.params.name }}
+  #      run: >
+  #        message="$(git log -n 1 --pretty=format:'CI ${{matrix.params.name}} %h .... %s')"; certoraRun \
+  #          certora/conf/${{ matrix.params.command }} \
+  #          --msg "$(echo $message | sed 's/[^a-zA-Z0-9., _-]/ /g')"
+  #      env:
+  #        CERTORAKEY: ${{ secrets.CERTORAKEY }}
+  #
+  #    - name: Download output json
+  #      if: always()
+  #      run: >
+  #        outputLink=$(sed 's/zipOutput/output/g' .zip-output-url.txt | sed 's/?/\/output.json?/g'); curl -L -b
+  #        "certoraKey=$CERTORAKEY;" ${outputLink} --output output.json || true; touch output.json;
+  #
+  #    - name: Archive output json
+  #      if: always()
+  #      uses: actions/upload-artifact@v3
+  #      with:
+  #        name: output for ${{ matrix.params.name }}
+  #        path: output.json
+  #
+  #  strategy:
+  #    fail-fast: false
+  #    max-parallel: 4
+  #    matrix:
+  #      params:
+  #        - { name: RulesForEmergencySystem, command: "emergencySystem.conf --debug" }
+
+  coverage:
+    needs: ["lint", "build", "test"]
+    runs-on: "ubuntu-latest"
+    steps:
+      - name: "Check out the repo"
+        uses: "actions/checkout@v3"
+        with:
+          submodules: "recursive"
+
+      - name: "Install Foundry"
+        uses: "foundry-rs/foundry-toolchain@v1"
+
+      - name: "Install the Node.js dependencies"
+        run: "yarn install --immutable"
+
+      - name: "Add coverage summary"
+        run: |
+          echo "## Coverage result" >> $GITHUB_STEP_SUMMARY
+
+      - name: "Generate the coverage report"
+        run: "forge coverage >> $GITHUB_STEP_SUMMARY"

@@ -1,0 +1,4 @@
+{
+  "filter_paths": "(mocks/|test/|lib/|script/)",
+  "detectors_to_exclude": "assembly"
+}
