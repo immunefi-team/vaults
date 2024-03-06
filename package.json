@@ -1,0 +1,38 @@
+{
+  "name": "vaults",
+  "version": "0.1.0",
+  "description": "Immunefi - Vaults System",
+  "repository": "git@github.com:immunefi-team/vaults.git",
+  "devDependencies": {
+    "@commitlint/cli": "^17.4.3",
+    "@commitlint/config-conventional": "^17.4.3",
+    "husky": "^8.0.3",
+    "lint-staged": "^13.1.2",
+    "prettier": "^2.8.4",
+    "prettier-plugin-solidity": "^1.1.2",
+    "solhint": "^3.3.8",
+    "solhint-plugin-prettier": "^0.0.5"
+  },
+  "scripts": {
+    "lint": "yarn lint:sol && yarn prettier:check",
+    "lint:sol": "solhint \"{src,test}/**/*.sol\"",
+    "postinstall": "husky install",
+    "prettier:check": "prettier --check \"**/*.{json,md,sol,yml}\"",
+    "prettier:write": "prettier --write \"**/*.{json,md,sol,yml}\"",
+    "precommit": "lint-staged",
+    "metro:goerli": "yarn run metro preview --broadcast --chain-id 5",
+    "metro:mainnet": "yarn run metro preview --broadcast --chain-id 1",
+    "metro:protocol:goerli": "yarn run metro preview script/deployers/Batch/DeployProtocol.s.sol --broadcast --chain-id 5",
+    "metro:protocol:mainnet": "yarn run metro preview script/deployers/Batch/DeployProtocol.s.sol --broadcast --chain-id 1"
+  },
+  "lint-staged": {
+    "*.{json,md,sol,yml}": [
+      "prettier --write",
+      "git add"
+    ]
+  },
+  "dependencies": {
+    "@0xmetropolis/cli": "^0.2.3",
+    "@gnosis.pm/zodiac": "^3.2.2"
+  }
+}
